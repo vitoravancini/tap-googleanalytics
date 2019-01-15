@@ -1,0 +1,79 @@
+{
+	"type": [
+		"null",
+		"object"
+	],
+	"additionalProperties": false,
+	"properties": {
+		"ga:date": {
+			"type": [
+				"string"
+			]
+		},
+		"ga:medium": {
+			"type": [
+				"string"
+			]
+		},
+		"ga:source": {
+			"type": [
+				"string"
+			]
+		},
+		"ga:campaign": {
+			"type": [
+				"string"
+			]
+		},
+		"ga:adContent": {
+			"type": [
+				"string"
+			]
+		},
+		"ga:sourceMedium": {
+			"type": [
+				"string"
+			]
+		},
+		"ga:pageViews": {
+			"type": [
+				"string"
+			]
+		},
+		"ga:sessions": {
+			"type": [
+				"string"
+			]
+		},
+		"ga:percentNewSessions": {
+			"type": [
+				"string"
+			]
+		},
+		"ga:newUsers": {
+			"type": [
+				"string"
+			]
+		},
+		"ga:users": {
+			"type": [
+				"string"
+			]
+		},
+		"ga:bounceRate": {
+			"type": [
+				"string"
+			]
+		},
+		"ga:pageViewsPerSession": {
+			"type": [
+				"string"
+			]
+		},
+		"ga:avgSessionDuration": {
+			"type": [
+				"string"
+			]
+		}
+	}
+}
