@@ -11,7 +11,7 @@ import singer
 from apiclient.discovery import build
 from oauth2client.service_account import ServiceAccountCredentials
 import google.oauth2.credentials
-from datetime import date
+from datetime import date, timedelta, datetime
 
 REQUIRED_CONFIG_KEYS = ["start_date", "view_id", "developer_token", "oauth_client_id", "oauth_client_secret", "refresh_token"]
 LOGGER = singer.get_logger()
@@ -72,19 +72,35 @@ def get_selected_streams(catalog):
 def sync(config, state, catalog, analytics):
 
     selected_stream_ids = get_selected_streams(catalog)
+    if 'end_date' in config:
+        end_date = datetime.strptime(config['end_date'], "%Y-%m-%d")
+    else:
+        end_date = datetime.today()
+    
+    start_date = datetime.strptime(config['start_date'], "%Y-%m-%d")
+    current_date = datetime.strptime(config['start_date'], "%Y-%m-%d")
+    
+    if end_date < start_date:
+        LOGGER.error("end_date: {} < start_Date: {}, exiting".format(end_date, start_date))
+        exit(1)
 
     # Loop over streams in catalog
     for stream in catalog.streams:
         stream_id = stream.tap_stream_id
 
         if stream_id in selected_stream_ids:
-            metrics = get_metrics_from_schema(stream.schema, stream.metadata)
-            dimensions = get_dimensions_from_schema(stream.schema, stream.metadata)
+            while (current_date <= end_date):
                 
-            if stream_id == 'ga-basic-report':         
-                report = get_report(analytics, metrics, dimensions, config)
-                LOGGER.info('Syncing stream:' + stream_id)
-                sync_report(report, stream)
+                metrics = get_metrics_from_schema(stream.schema, stream.metadata)
+                dimensions = get_dimensions_from_schema(stream.schema, stream.metadata)
+                    
+                if stream_id == 'ga-basic-report':         
+                    report = get_report(analytics, metrics, dimensions, config, current_date)
+                    LOGGER.info('Syncing stream: {} for {}'.format(stream_id, current_date))
+                    sync_report(report, stream)
+                
+                current_date += timedelta(days=1)
+            
 
     return
 
@@ -155,7 +171,7 @@ def initialize_analytics_reporting(config):
   return analytics
 
 
-def get_report(analytics, metrics, dimensions, config):
+def get_report(analytics, metrics, dimensions, config, current_date):
   """Queries the Analytics Reporting API V4.
 
   Args:
@@ -172,18 +188,13 @@ def get_report(analytics, metrics, dimensions, config):
 
   metrics_for_ga = [to_ga_metric(metric) for metric in metrics]
   dimensions_for_ga = [to_ga_dimension(dimension) for dimension in dimensions]
-  
-  if 'end_date' in config:
-    end_date = config['end_date']
-  else:
-    end_date = date.today().isoformat()
 
   return analytics.reports().batchGet(
       body={
         'reportRequests': [
         {
           'viewId': config['view_id'],
-          'dateRanges': [{'startDate': config['start_date'], 'endDate':end_date }],
+          'dateRanges': [{'startDate': current_date.date().isoformat(), 'endDate':current_date.date().isoformat()}],
           'metrics': metrics_for_ga,
           'dimensions': dimensions_for_ga
         }]
