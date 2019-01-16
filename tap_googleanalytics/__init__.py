@@ -86,7 +86,7 @@ def sync(config, state, catalog, analytics):
 
     # Loop over streams in catalog
     for stream in catalog.streams:
-        stream_id = stream.tap_stream_id
+        stream_id = stream.stream
 
         if stream_id in selected_stream_ids:
             while (current_date <= end_date):
@@ -128,7 +128,7 @@ def get_metrics_from_schema(stream_schema, stream_metadata):
 def sync_report(reports, stream):
     stream_metadata = stream.metadata
     stream_schema = stream.schema
-    stream_name = stream.tap_stream_id
+    stream_name = stream.stream
 
     metrics = get_metrics_from_schema(stream_schema, stream_metadata)
     dimensions = get_dimensions_from_schema(stream_schema, stream_metadata)
