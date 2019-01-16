@@ -30,7 +30,6 @@ TODOS:
 Use breadcrubms to differ between metrics and dimensions
 Use Discovery endpoint for generatig schemas
 Handle State? 
+Allow stream_alias to name the stream
 
 Copyright &copy; 2018 Stitch
-
-
