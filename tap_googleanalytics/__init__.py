@@ -15,6 +15,7 @@ from datetime import date, timedelta, datetime
 
 REQUIRED_CONFIG_KEYS = ["start_date", "view_id", "developer_token", "oauth_client_id", "oauth_client_secret", "refresh_token"]
 LOGGER = singer.get_logger()
+management = []
 
 def get_abs_path(path):
     return os.path.join(os.path.dirname(os.path.realpath(__file__)), path)
@@ -69,7 +70,7 @@ def get_selected_streams(catalog):
     return selected_streams
 
 
-def sync(config, state, catalog, analytics):
+def sync(config, state, catalog, analytics, management):
 
     selected_stream_ids = get_selected_streams(catalog)
     if 'end_date' in config:
@@ -90,18 +91,28 @@ def sync(config, state, catalog, analytics):
 
         if stream_id in selected_stream_ids:
             while (current_date <= end_date):
-                
+
                 metrics = get_metrics_from_schema(stream.schema, stream.metadata)
                 dimensions = get_dimensions_from_schema(stream.schema, stream.metadata)
-                    
-                if stream_id == 'ga-basic-report':         
-                    report = get_report(analytics, metrics, dimensions, config, current_date)
-                    LOGGER.info('Syncing stream: {} for {}'.format(stream_id, current_date))
-                    sync_report(report, stream)
                 
-                current_date += timedelta(days=1)
-            
+                if stream_id == 'ga-basic-report':
+               
+                    report = get_report(analytics, metrics, dimensions, config, current_date)
+                    LOGGER.info('Syncing stream:' + stream_id)
+                    sync_report(report, stream)
 
+                elif stream_id == 'ga-goals-report':
+                    LOGGER.info('Syncing stream:' + stream_id)
+
+                    goals = list_goals(config, stream, management)
+                    LOGGER.info('Goals:' + str(goals))
+                    LOGGER.info('Date:' + str(current_date))
+
+                    reports = get_goals_reports(config, goals, stream, analytics, metrics, dimensions, current_date)
+                    for report in reports:
+                        #pp.pprint(report)
+                        sync_report(report, stream)
+                current_date += timedelta(days=1)
     return
 
 
@@ -125,6 +136,14 @@ def get_metrics_from_schema(stream_schema, stream_metadata):
     return metrics
 
 
+def get_goals_reports(config, goals, stream, analytics, metrics, dimensions, current_date):
+    reports = []
+    for goal in goals:
+        report = get_goal_report(analytics, goal['id'], metrics, dimensions, config, current_date)
+        reports.append(report)
+    return reports
+
+
 def sync_report(reports, stream):
     stream_metadata = stream.metadata
     stream_schema = stream.schema
@@ -132,8 +151,10 @@ def sync_report(reports, stream):
 
     metrics = get_metrics_from_schema(stream_schema, stream_metadata)
     dimensions = get_dimensions_from_schema(stream_schema, stream_metadata)
-
     for report in reports["reports"]:
+        LOGGER.info("Report")
+        LOGGER.info(report)
+
         if 'rows' in report['data']: 
             for line in report['data']['rows']:
                 metric_line = {}
@@ -171,6 +192,58 @@ def initialize_analytics_reporting(config):
   return analytics
 
 
+def initialize_analytics_management(config):
+  """Initializes an Analytics MGMT API V3 service object.
+
+  Returns:
+    An authorized Analytics MGMT API V3 service object.
+  """
+  _GOOGLE_OAUTH2_ENDPOINT = 'https://accounts.google.com/o/oauth2/token'
+  creds = google.oauth2.credentials.Credentials(
+        config['developer_token'], refresh_token=config['refresh_token'],
+        client_id=config['oauth_client_id'], 
+        client_secret=config['oauth_client_secret'],
+        token_uri=_GOOGLE_OAUTH2_ENDPOINT)
+
+  analytics = build('analytics', 'v3', credentials=creds)
+
+  return analytics
+
+
+def get_goal_report(analytics, goal_id, metrics, dimensions, config, current_date):
+  """Queries the Analytics Reporting API V4 for the goal metrics
+
+  Args:
+    analytics: An authorized Analytics Management API V3 service object.
+    goal_id: The id of the goal to return the metrics
+  Returns:
+    The Analytics Reporting API V4 response.
+  """ 
+    
+  def to_ga_metric(metric_name):
+    if "XX" in metric_name:
+        metric_name = metric_name.replace("XX", goal_id)
+    return {"expression" : metric_name }
+    
+  def to_ga_dimension(dimension):
+        return {"name" : dimension }
+
+  metrics_for_ga = [to_ga_metric(metric) for metric in metrics]
+  dimensions_for_ga = [to_ga_dimension(dimension) for dimension in dimensions]
+
+  return analytics.reports().batchGet(
+      body={
+          'reportRequests': [
+          {
+            'viewId': config['view_id'],
+            'dateRanges': [{'startDate': current_date.date().isoformat(), 'endDate':current_date.date().isoformat()}],
+            'metrics': metrics_for_ga,
+            'dimensions': dimensions_for_ga
+          }]
+      }
+  ).execute() 
+
+
 def get_report(analytics, metrics, dimensions, config, current_date):
   """Queries the Analytics Reporting API V4.
 
@@ -188,7 +261,7 @@ def get_report(analytics, metrics, dimensions, config, current_date):
 
   metrics_for_ga = [to_ga_metric(metric) for metric in metrics]
   dimensions_for_ga = [to_ga_dimension(dimension) for dimension in dimensions]
-
+  
   return analytics.reports().batchGet(
       body={
         'reportRequests': [
@@ -202,9 +275,18 @@ def get_report(analytics, metrics, dimensions, config, current_date):
   ).execute()
 
 
+def list_goals(config, stream, management):
+    result = management.management().goals().list(
+        accountId=config['account_id'],
+        webPropertyId=config['web_property_id'],
+        profileId=config['view_id']).execute()
+
+    return result['items']
+
+
 @utils.handle_top_exception(LOGGER)
 def main():
-
+    
     # Parse command line arguments
     args = utils.parse_args(REQUIRED_CONFIG_KEYS)
 
@@ -220,9 +302,10 @@ def main():
         else:
             catalog =  discover()
 
+        management = initialize_analytics_management(args.config)
         analytics = initialize_analytics_reporting(args.config)
-        sync(args.config, args.state, catalog, analytics)
 
+        sync(args.config, args.state, catalog, analytics, management)
 
 
 if __name__ == "__main__":
