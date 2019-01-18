@@ -12,6 +12,7 @@ from apiclient.discovery import build
 from oauth2client.service_account import ServiceAccountCredentials
 import google.oauth2.credentials
 from datetime import date, timedelta, datetime
+import time
 
 REQUIRED_CONFIG_KEYS = ["start_date", "view_id", "developer_token", "oauth_client_id", "oauth_client_secret", "refresh_token"]
 LOGGER = singer.get_logger()
@@ -91,7 +92,6 @@ def sync(config, state, catalog, analytics, management):
 
         if stream_id in selected_stream_ids:
             while (current_date <= end_date):
-
                 metrics = get_metrics_from_schema(stream.schema, stream.metadata)
                 dimensions = get_dimensions_from_schema(stream.schema, stream.metadata)
                 
@@ -132,10 +132,11 @@ def get_metrics_from_schema(stream_schema, stream_metadata):
     metadata_dict = metadata.to_map(stream_metadata)
     
     def is_metric(prop):
-        metadata.get(metadata_dict, ("properties", prop), "dimension") is not True or prop is not "date"
+        return metadata.get(metadata_dict, ("properties", prop), "dimension") is not True and prop != "date"
     
     metrics = [prop for prop in schema_dict['properties'] if is_metric(prop)]
     
+    LOGGER.info(metrics)
     return metrics
 
 
