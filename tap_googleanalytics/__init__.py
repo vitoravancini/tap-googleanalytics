@@ -130,8 +130,11 @@ def get_metrics_from_schema(stream_schema, stream_metadata):
     #only flat metrics for now
     schema_dict = stream_schema.to_dict()
     metadata_dict = metadata.to_map(stream_metadata)
-       
-    metrics = [prop for prop in schema_dict['properties'] if metadata.get(metadata_dict, ("properties", prop), "dimension") is not True]
+    
+    def is_metric(prop):
+        metadata.get(metadata_dict, ("properties", prop), "dimension") is not True or prop is not "date"
+    
+    metrics = [prop for prop in schema_dict['properties'] if is_metric(prop)]
     
     return metrics
 
@@ -167,6 +170,11 @@ def sync_report(reports, stream):
 
                 singer_line = None
                 
+                if "ga:date" in metric_line:
+                    gaDate = datetime.strptime(metric_line['ga:date'], "%Y%m%d")
+                    singerDate = gaDate.strftime("%Y-%m-%d")
+                    metric_line['date'] = singerDate
+
                 with Transformer(singer.UNIX_MILLISECONDS_INTEGER_DATETIME_PARSING) as bumble_bee:
                     singer_lines = bumble_bee.transform(metric_line, stream_schema.to_dict())
 
