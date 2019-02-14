@@ -12,7 +12,7 @@ setup(
     install_requires=[
         "singer-python>=5.0.12",
         "requests",
-        "oauth2client==4.1.3",
+        "oauth2client==3.0.0",
         "google-api-python-client==1.7.7"
     ],
     entry_points="""

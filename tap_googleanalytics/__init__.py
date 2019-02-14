@@ -95,7 +95,7 @@ def sync(config, state, catalog, analytics, management):
                 metrics = get_metrics_from_schema(stream.schema, stream.metadata)
                 dimensions = get_dimensions_from_schema(stream.schema, stream.metadata)
                 
-                if stream_id == 'ga-basic-report':
+                if stream_id == 'ga-basic-report' or stream_id == 'ga-adwords-report':
                
                     report = get_report(analytics, metrics, dimensions, config, current_date)
                     LOGGER.info('Syncing stream:' + stream_id)
@@ -113,6 +113,8 @@ def sync(config, state, catalog, analytics, management):
                         #pp.pprint(report)
                         sync_report(report, stream)
                 current_date += timedelta(days=1)
+                LOGGER.info("Waiting 2s for next")
+                time.sleep(2)
     return
 
 
@@ -180,6 +182,7 @@ def sync_report(reports, stream):
                     singer_lines = bumble_bee.transform(metric_line, stream_schema.to_dict())
 
                 singer.write_record(stream_name, singer_lines)
+               
 
 
 def initialize_analytics_reporting(config):
@@ -278,7 +281,8 @@ def get_report(analytics, metrics, dimensions, config, current_date):
           'viewId': config['view_id'],
           'dateRanges': [{'startDate': current_date.date().isoformat(), 'endDate':current_date.date().isoformat()}],
           'metrics': metrics_for_ga,
-          'dimensions': dimensions_for_ga
+          'dimensions': dimensions_for_ga,
+          'includeEmptyRows': True
         }]
       }
   ).execute()
